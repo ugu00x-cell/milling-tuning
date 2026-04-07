@@ -4,3 +4,5 @@ __pycache__/
 # data/raw/*.csv  ← Cloud用にコミットする
 # models/*.joblib  ← Cloud用にコミットする
 .env
+*.zip
+*.mat
