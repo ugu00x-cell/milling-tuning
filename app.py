@@ -226,7 +226,7 @@ with tab3:
     if st.button("📈 パレート分析実行", type="primary", key="pareto"):
         with st.spinner("パレート最適解を計算中..."):
             pareto_df = compute_pareto_front(
-                model, quality_type=pareto_qt, n_points=30,
+                model, quality_type=pareto_qt, n_points=10,
             )
 
         # チャート

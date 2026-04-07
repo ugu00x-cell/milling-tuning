@@ -165,7 +165,7 @@ def optimize_conditions(
         method="SLSQP",
         bounds=[rpm_bounds, torque_bounds],
         constraints={"type": "ineq", "fun": wear_constraint},
-        options={"maxiter": 500, "ftol": 1e-8},
+        options={"maxiter": 50, "ftol": 1e-6},
     )
 
     opt_rpm = result.x[0]
