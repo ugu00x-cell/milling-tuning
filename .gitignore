@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
 *.log
-data/raw/*.csv
-models/*.joblib
+# data/raw/*.csv  ← Cloud用にコミットする
+# models/*.joblib  ← Cloud用にコミットする
 .env
