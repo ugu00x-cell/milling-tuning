@@ -192,7 +192,10 @@ def compute_pareto_front(
     quality_type: str = "M",
     n_points: int = 50,
 ) -> pd.DataFrame:
-    """摩耗量 vs 除去量のパレートフロントを計算する。
+    """摩耗量 vs 除去量のパレートフロントをグリッドサーチで計算する。
+
+    scipy.optimizeのループではなく、rpm×torqueのグリッドで
+    一括予測してからフィルタする高速方式。
 
     Args:
         model: 学習済みモデル
@@ -202,15 +205,54 @@ def compute_pareto_front(
     Returns:
         pd.DataFrame: パレート最適解のリスト
     """
+    # rpm×torqueのグリッドを一括生成して予測
+    rpm_vals = np.linspace(1168, 2886, 30)
+    torque_vals = np.linspace(3.8, 76.6, 30)
+    rpm_grid, torque_grid = np.meshgrid(rpm_vals, torque_vals)
+    rpm_flat = rpm_grid.ravel()
+    torque_flat = torque_grid.ravel()
+    mrr_flat = torque_flat * rpm_flat / 1000.0
+
+    type_h = 1 if quality_type == "H" else 0
+    type_l = 1 if quality_type == "L" else 0
+    type_m = 1 if quality_type == "M" else 0
+
+    grid_df = pd.DataFrame({
+        "air_temp_k": 300.0,
+        "process_temp_k": 310.0,
+        "rotational_speed_rpm": rpm_flat,
+        "torque_nm": torque_flat,
+        "mrr": mrr_flat,
+        "type_H": type_h,
+        "type_L": type_l,
+        "type_M": type_m,
+    })
+
+    # 一括予測（1回のpredict呼び出し）
+    wear_pred = model.predict(grid_df)
+    grid_df["predicted_wear_min"] = np.maximum(wear_pred, 0)
+    grid_df["mrr_val"] = mrr_flat
+
+    # 各摩耗上限ごとに、MRR最大の条件を抽出
     wear_limits = np.linspace(50, 250, n_points)
     results = []
-
     for wl in wear_limits:
-        opt = optimize_conditions(
-            model, max_wear=wl,
-            quality_type=quality_type,
-        )
-        results.append(opt)
+        subset = grid_df[grid_df["predicted_wear_min"] <= wl]
+        if subset.empty:
+            continue
+        best_idx = subset["mrr_val"].idxmax()
+        row = subset.loc[best_idx]
+        results.append({
+            "max_wear_limit": wl,
+            "rotational_speed_rpm": round(
+                row["rotational_speed_rpm"], 1
+            ),
+            "torque_nm": round(row["torque_nm"], 2),
+            "mrr": round(row["mrr_val"], 2),
+            "predicted_wear_min": round(
+                row["predicted_wear_min"], 1
+            ),
+        })
 
     return pd.DataFrame(results)
 
