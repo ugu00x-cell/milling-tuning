@@ -35,24 +35,38 @@ st.set_page_config(
 # ── モデル読み込み（キャッシュ） ──────────────────────────────
 @st.cache_resource
 def get_model():
-    """学習済みモデルを読み込む（なければ自動学習）。"""
+    """学習済みモデルを読み込む（なければ軽量学習）。"""
     model_dir = os.path.join(_APP_DIR, "models")
     model_path = os.path.join(model_dir, "best_model.joblib")
-    if not os.path.exists(model_path):
-        # Cloud/初回起動時: データ取得→学習を自動実行
-        from data_loader import (
-            download_dataset,
-            load_and_preprocess,
-            split_features_target,
-        )
-        from model import train_xgboost, save_model
 
-        csv_path = download_dataset()
-        df = load_and_preprocess(csv_path)
-        X_train, X_test, y_train, y_test = split_features_target(df)
-        best = train_xgboost(X_train, y_train)
-        save_model(best, "best_model", model_dir)
-    return load_best_model(model_dir)
+    # まずjoblib読み込みを試行
+    if os.path.exists(model_path):
+        try:
+            return load_best_model(model_dir)
+        except Exception:
+            pass  # バージョン不一致時は再学習
+
+    # Cloud/初回: GridSearchなしの軽量学習
+    from data_loader import (
+        download_dataset,
+        load_and_preprocess,
+        split_features_target,
+    )
+    from sklearn.ensemble import RandomForestRegressor
+
+    csv_path = download_dataset()
+    df = load_and_preprocess(csv_path)
+    X_train, _, y_train, _ = split_features_target(df)
+    model = RandomForestRegressor(
+        n_estimators=100, max_depth=10, random_state=42, n_jobs=-1,
+    )
+    model.fit(X_train, y_train)
+
+    # 保存
+    import joblib
+    os.makedirs(model_dir, exist_ok=True)
+    joblib.dump(model, model_path)
+    return model
 
 
 # ── ヘッダー ──────────────────────────────────────────────────
